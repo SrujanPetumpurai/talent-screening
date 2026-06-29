@@ -1,0 +1,52 @@
+
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Job {
+  id         String      @id @default(cuid())
+  title      String
+  rawText    String
+  analysis   Json
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  candidates Candidate[]
+}
+
+model Candidate {
+  id                String   @id @default(cuid())
+  jobId             String
+  job               Job      @relation(fields: [jobId], references: [id])
+
+  name              String
+  currentTitle      String?
+  currentCompany    String?
+  location          String?
+  skills            String[]
+  experienceYears   Int?
+  experienceSummary String?
+
+  source            String
+  sourceUrl         String?
+  confidenceLevel   Float    @default(1.0)
+  rawData           Json?
+
+  semanticScore     Float?
+  scoreBreakdown    Json?
+  redFlags          Json?
+  isShortlisted     Boolean  @default(false)
+  shortlistOverride Boolean?
+
+  interviewToken    String?  @unique
+  interviewStatus   String   @default("not_invited")
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
