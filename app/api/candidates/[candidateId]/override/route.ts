@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { candidateId: string } }
+  { params }: { params: Promise<{ candidateId: string }> }
 ) {
+  const { candidateId } = await params;
   const { override } = await req.json();
 
   if (override !== true && override !== false && override !== null) {
@@ -15,7 +16,7 @@ export async function PATCH(
   }
 
   const candidate = await prisma.candidate.findUniqueOrThrow({
-    where: { id: params.candidateId },
+    where: { id: candidateId },
     include: { job: true },
   });
 
@@ -25,7 +26,7 @@ export async function PATCH(
       : (candidate.semanticScore ?? 0) >= candidate.job.shortlistThreshold;
 
   const updated = await prisma.candidate.update({
-    where: { id: params.candidateId },
+    where: { id: candidateId },
     data: {
       shortlistOverride: override,
       isShortlisted,
