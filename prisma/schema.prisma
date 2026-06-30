@@ -158,20 +158,25 @@ model InterviewAnswer {
   questionId  String       @unique
   question    InterviewQuestion @relation(fields: [questionId], references: [id])
 
-  // Where the uploaded video lives (Railway / R2 / etc.)
+  // Where the FINAL assembled video lives (R2), set once all chunks are stitched
   videoUrl    String?
   uploadStatus UploadStatus @default(pending)
+
+  // Chunk tracking for resumable upload
+  // Indices of chunks successfully received and stored in R2, e.g. [0, 1, 2]
+  receivedChunks Int[]      @default([])
+  // Total chunks expected, set when recording finishes and we know the final count
+  totalChunks    Int?
 
   // Whisper transcription output (Day 4)
   transcript  String?
 
   // Per-dimension answer scores (Day 4, 0.0 – 1.0 each)
-  relevanceScore   Float?   // Does the answer address the question and JD?
-  clarityScore     Float?   // Structure, filler words, coherence
-  specificityScore Float?   // Concrete examples vs vague generalities
-  depthScore       Float?   // Technical/conceptual depth
+  relevanceScore   Float?
+  clarityScore     Float?
+  specificityScore Float?
+  depthScore       Float?
 
-  // 2–3 sentence summary of the answer (Day 4)
   answerSummary String?
 
   createdAt   DateTime     @default(now())
