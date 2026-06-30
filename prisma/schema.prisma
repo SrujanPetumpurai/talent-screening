@@ -10,21 +10,60 @@ datasource db {
 }
 
 
-model Job {
-  id         String      @id @default(cuid())
-  title      String
-  rawText    String
-  analysis   Json
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  candidates Candidate[]
+enum InterviewStatus {
+  not_invited
+  invited
+  in_progress
+  completed
 }
 
-model Candidate {
-  id                String   @id @default(cuid())
-  jobId             String
-  job               Job      @relation(fields: [jobId], references: [id])
+enum UploadStatus {
+  pending
+  uploading
+  complete
+  failed
+}
 
+enum QuestionType {
+  technical
+  behavioural
+  domain
+  situational
+}
+
+// ─────────────────────────────────────────────
+// Job
+// ─────────────────────────────────────────────
+
+model Job {
+  id                 String      @id @default(cuid())
+  title              String
+  rawText            String
+  // Structured JD analysis from extract-JD.ts
+  // Shape: { role_title, role_level, experience_range, required_skills,
+  //          preferred_skills, domain_experience, implicit_requirements,
+  //          responsibilities }
+  analysis           Json
+
+  // Configurable auto-shortlist threshold (0.0 – 1.0)
+  shortlistThreshold Float       @default(0.75)
+
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  candidates         Candidate[]
+}
+
+// ─────────────────────────────────────────────
+// Candidate
+// ─────────────────────────────────────────────
+
+model Candidate {
+  id                String          @id @default(cuid())
+  jobId             String
+  job               Job             @relation(fields: [jobId], references: [id])
+
+  // ── Profile data (from scraper) ──────────────
   name              String
   currentTitle      String?
   currentCompany    String?
@@ -33,20 +72,108 @@ model Candidate {
   experienceYears   Int?
   experienceSummary String?
 
-  source            String
+  // ── Scrape metadata ──────────────────────────
+  source            String          // e.g. "linkedin", "naukri"
   sourceUrl         String?
-  confidenceLevel   Float    @default(1.0)
+  // 1.0 = full profile, <1.0 = partial (name+title only, etc.)
+  confidenceLevel   Float           @default(1.0)
+  // Raw Apify/scraper payload — job history, education, etc.
   rawData           Json?
 
+  // ── Semantic scoring (pre-interview, profile vs JD) ──
+  // Overall weighted score (0.0 – 1.0)
   semanticScore     Float?
+  // Per-criterion breakdown:
+  // {
+  //   technicalSkills: 0.90,
+  //   seniority: 0.60,
+  //   domainExperience: 0.40,
+  //   implicitRequirements: 0.55,
+  //   overall: 0.70
+  // }
   scoreBreakdown    Json?
+  // Detected red flags:
+  // {
+  //   jobHopping: { detected: true, details: "4 jobs in 18 months" },
+  //   titleInflation: { detected: false },
+  //   skillMismatch: { detected: true, details: "Claims 'AWS' but no cloud role in history" }
+  // }
   redFlags          Json?
-  isShortlisted     Boolean  @default(false)
+
+  // ── Shortlisting ─────────────────────────────
+  isShortlisted     Boolean         @default(false)
+  // true = recruiter manually shortlisted, false = manually rejected,
+  // null = system decision stands
   shortlistOverride Boolean?
 
-  interviewToken    String?  @unique
-  interviewStatus   String   @default("not_invited")
+  // ── Interview (post-shortlist) ────────────────
+  interviewToken    String?         @unique
+  interviewStatus   InterviewStatus @default(not_invited)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  // Aggregate interview score (0.0 – 1.0) computed after all answers scored
+  interviewScore    Float?
+  // Aggregate scorecard:
+  // {
+  //   hireSignal: "recommended" | "not_recommended" | "maybe",
+  //   hireConfidence: 0.82,
+  //   answerSummaries: [ { questionId, summary } ],
+  //   followUpQuestions: [ "..." ],
+  //   dimensionAverages: { relevance, clarity, specificity, depth }
+  // }
+  interviewScorecard Json?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  questions         InterviewQuestion[]
+}
+
+// ─────────────────────────────────────────────
+// InterviewQuestion
+// LLM-generated, candidate-specific (Day 3)
+// ─────────────────────────────────────────────
+
+model InterviewQuestion {
+  id           String       @id @default(cuid())
+  candidateId  String
+  candidate    Candidate    @relation(fields: [candidateId], references: [id])
+
+  questionText String
+  questionType QuestionType
+  // Display order in the interview flow
+  orderIndex   Int
+
+  answer       InterviewAnswer?
+
+  createdAt    DateTime     @default(now())
+}
+
+// ─────────────────────────────────────────────
+// InterviewAnswer
+// One per question, written by the Android app upload pipeline (Day 3–4)
+// ─────────────────────────────────────────────
+
+model InterviewAnswer {
+  id          String       @id @default(cuid())
+  questionId  String       @unique
+  question    InterviewQuestion @relation(fields: [questionId], references: [id])
+
+  // Where the uploaded video lives (Railway / R2 / etc.)
+  videoUrl    String?
+  uploadStatus UploadStatus @default(pending)
+
+  // Whisper transcription output (Day 4)
+  transcript  String?
+
+  // Per-dimension answer scores (Day 4, 0.0 – 1.0 each)
+  relevanceScore   Float?   // Does the answer address the question and JD?
+  clarityScore     Float?   // Structure, filler words, coherence
+  specificityScore Float?   // Concrete examples vs vague generalities
+  depthScore       Float?   // Technical/conceptual depth
+
+  // 2–3 sentence summary of the answer (Day 4)
+  answerSummary String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
