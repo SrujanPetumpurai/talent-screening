@@ -45,15 +45,12 @@ export async function POST(
 
   // Idempotent update — only add chunkIndex if not already recorded
   const updated = await prisma.interviewAnswer.update({
-    where: { id: answerId },
-    data: {
-      receivedChunks: answer.receivedChunks.includes(chunkIndex)
-        ? answer.receivedChunks
-        : [...answer.receivedChunks, chunkIndex].sort((a, b) => a - b),
-      uploadStatus: "uploading",
-    },
-  });
-
+  where: { id: answerId },
+  data: {
+    receivedChunks: { push: chunkIndex },
+    uploadStatus: "uploading",
+  },
+});
   return Response.json({
     received: chunkIndex,
     totalReceived: updated.receivedChunks.length,

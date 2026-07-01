@@ -168,7 +168,6 @@ model InterviewAnswer {
   // Total chunks expected, set when recording finishes and we know the final count
   totalChunks    Int?
 
-  // Whisper transcription output (Day 4)
   transcript  String?
 
   // Per-dimension answer scores (Day 4, 0.0 – 1.0 each)

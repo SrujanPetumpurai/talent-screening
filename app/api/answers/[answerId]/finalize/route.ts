@@ -22,8 +22,8 @@ if (answer.uploadStatus === "complete") {
 }
   // Confirm every expected chunk actually arrived before stitching
   const expected = Array.from({ length: totalChunks }, (_, i) => i);
-const missing = expected.filter((i) => !answer.receivedChunks.includes(i));
-if (missing.length > 0) {
+const receivedSet = new Set(answer.receivedChunks);
+const missing = expected.filter((i) => !receivedSet.has(i));if (missing.length > 0) {
   return Response.json(
     { error: "Missing chunks", missing },
     { status: 409 }
